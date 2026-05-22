@@ -1,0 +1,37 @@
+name: "Sandman Security Sandbox"
+description: "Run Sandman in GitHub Actions to monitor build-time supply chain behavior with eBPF telemetry."
+author: "Trac3x"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  outdir:
+    description: "Directory to store Sandman JSONL telemetry files"
+    required: false
+    default: "./sandman_logs"
+  image:
+    description: "Sandman Docker image to run"
+    required: false
+    default: "trac3x/sandman"
+  image-tag:
+    description: "Sandman Docker image tag"
+    required: false
+    default: "latest"
+  container-name:
+    description: "Name for the background Sandman Docker container"
+    required: false
+    default: ""
+  retention-days:
+    description: "Artifact retention period in days"
+    required: false
+    default: "14"
+  monitor-pid:
+    description: "Host PID to monitor. Defaults to the parent of this Node action process."
+    required: false
+    default: ""
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
+  post: "dist/post.js"
