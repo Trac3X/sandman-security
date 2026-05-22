@@ -53,7 +53,6 @@ async function run() {
       '-v',
       `${outdir}:/app/logs`,
       imageRef,
-      '/app/sandman',
       '-outdir',
       '/app/logs',
       monitorPid.toString()

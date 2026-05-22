@@ -1,0 +1,30 @@
+name: Sandman Security Action Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sandman-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6.0.2
+
+      - name: Start Sandman sensor
+        uses: Trac3X/sandman-security@v0.0.0
+        with:
+          image: trac3x/sandman
+          image-tag: latest
+          outdir: ./sandman_logs
+          retention-days: "14"
+
+      - name: Run malware behavior simulation
+        env:
+          SANDMAN_TEST_CYCLES: "2"
+        run: python3 sandman-security/examples/malware.py
+
+      - name: Show generated telemetry files
+        if: always()
+        run: |
+          ls -lah sandman_logs || true
+          head -n 20 sandman_logs/*.jsonl || true

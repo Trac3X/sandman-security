@@ -8,7 +8,7 @@
     "lint": "node --check src/index.js && node --check src/post.js"
   },
   "dependencies": {
-    "@actions/artifact": "^6.2.1",
+    "@actions/artifact": "^1.1.3",
     "@actions/core": "^1.11.1",
     "@actions/exec": "^1.1.1",
     "@actions/glob": "^0.5.1",
