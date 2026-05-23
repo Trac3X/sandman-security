@@ -33,7 +33,7 @@ async function run() {
     const retentionDays =
       Number.parseInt(retentionInput, 10);
 
-    // Stop sensor container
+    // Stop telemetry container
     if (containerId || containerName) {
       const target = containerId || containerName;
 
@@ -41,7 +41,6 @@ async function run() {
         `[Sandman] Stopping telemetry container: ${target}`
       );
 
-      // docker --time deprecated -> use --timeout
       await tryExec('docker', [
         'stop',
         '--timeout',
@@ -54,6 +53,7 @@ async function run() {
       );
     }
 
+    // Validate output directory
     if (!outdir) {
       core.warning(
         '[Sandman] No output directory state was found; skipping artifact upload.'
@@ -61,7 +61,7 @@ async function run() {
       return;
     }
 
-    // Fix ownership so runner can read logs
+    // Fix permissions so GitHub runner can read logs
     await tryExec('sudo', [
       'chown',
       '-R',
@@ -73,6 +73,7 @@ async function run() {
       '[Sandman] Collecting telemetry artifacts.'
     );
 
+    // Find telemetry files
     const globber = await glob.create(
       path.join(outdir, '*.jsonl')
     );
@@ -84,7 +85,6 @@ async function run() {
         '[Sandman] No telemetry logs were generated.'
       );
 
-      // Debug listing
       await tryExec('ls', ['-lah', outdir]);
 
       return;
@@ -94,7 +94,7 @@ async function run() {
       `[Sandman] Found ${files.length} telemetry file(s).`
     );
 
-    // Print preview into Actions logs
+    // Print preview in GitHub Actions logs
     for (const file of files) {
       core.info(`[Sandman] Previewing ${file}`);
 
@@ -104,11 +104,11 @@ async function run() {
       ]);
     }
 
-    // Modern artifact client API
+    // Modern artifact API
     const artifactClient = artifact.create();
 
-    const artifactName =
-      `sandman-telemetry-${process.env.GITHUB_RUN_ID || Date.now()}`;
+    // Keep artifact name simple and valid
+    const artifactName = 'sandman-telemetry';
 
     await artifactClient.uploadArtifact(
       artifactName,
@@ -122,7 +122,7 @@ async function run() {
     );
 
     core.info(
-      `[Sandman] Telemetry uploaded: ${artifactName}`
+      `[Sandman] Telemetry uploaded successfully: ${artifactName}`
     );
   } catch (error) {
     core.setFailed(
