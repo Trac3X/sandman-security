@@ -27559,6 +27559,7 @@ const core = __nccwpck_require__(7484);
 const io = __nccwpck_require__(4994);
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
+const exec = __nccwpck_require__(5236);
 
 async function run() {
   try {
@@ -27567,21 +27568,20 @@ async function run() {
     const outdir = path.resolve(workspace, requestedOutdir);
     const imageRef = `${core.getInput('image') || 'trac3x/sandman'}:${core.getInput('image-tag') || 'latest'}`;
 
-    // 1. Prepare the output directory and unlock permissions for Docker root writes
+    // 1. Prepare output directory with absolute open permissions
     await io.mkdirP(outdir);
-    (__nccwpck_require__(5317).execSync)(`sudo chmod -R 777 ${outdir}`);
+    await exec.exec('sudo', ['chmod', '-R', '777', outdir]);
 
     // 2. Synthesize the JIT Execution Wrapper
-    // This script grabs its own PID, starts the eBPF container targeting itself,
-    // and then uses `exec` to replace itself with the malware payload.
+    // Notice we REMOVED the '--rm' flag so the container persists if it crashes.
+    // We also use -outdir=/app/logs to ensure Go parses the flag safely.
     const wrapperScript = `#!/bin/bash
 set -e
 
 TARGET_PID=$$
 echo "[Sandman] Intercepting execution. Attaching eBPF sensors to PID: $TARGET_PID"
 
-# Start the sensor dynamically, tracking ONLY this exact execution tree
-docker run -d --rm \\
+docker run -d \\
   --name sandman-ebpf-session \\
   --privileged \\
   --pid=host \\
@@ -27590,15 +27590,14 @@ docker run -d --rm \\
   -v /sys/kernel/debug:/sys/kernel/debug \\
   -v /sys/kernel/tracing:/sys/kernel/tracing \\
   -v /lib/modules:/lib/modules:ro \\
-  -v ${outdir}:/app/logs \\
+  -v "${outdir}:/app/logs" \\
   ${imageRef} \\
-  -outdir /app/logs $TARGET_PID > /dev/null
+  -outdir=/app/logs $TARGET_PID
 
-# Allow 1.5 seconds for eBPF kernel probes to securely lock into the Ring 0 subsystems
-sleep 1.5
-echo "[Sandman] Subsystem locked. Executing payload..."
+echo "[Sandman] Kernel sensors deploying. Waiting 2 seconds for Ring-0 lock..."
+sleep 2
 
-# Replace the current bash process with the requested malware command
+echo "[Sandman] Subsystem locked. Executing payload: $@"
 exec "$@"
 `;
 
@@ -27606,12 +27605,15 @@ exec "$@"
     const wrapperPath = '/usr/local/bin/sandman-run';
     fs.writeFileSync(wrapperPath, wrapperScript, { mode: 0o755 });
 
-    // 4. Save state so post.js knows exactly what to tear down
+    // Ensure it is executable
+    await exec.exec('sudo', ['chmod', '+x', wrapperPath]);
+
+    // 4. Save state for teardown
     core.saveState('sandman_container_name', 'sandman-ebpf-session');
     core.saveState('sandman_outdir', outdir);
     core.saveState('sandman_retention_days', core.getInput('retention-days') || '14');
 
-    core.info(`[Sandman] Injector prepared. Use 'sandman-run <command>' in your workflow to safely trace payloads without .NET noise.`);
+    core.info(`[Sandman] Injector prepared. Target wrapper deployed to ${wrapperPath}`);
   } catch (error) {
     core.setFailed(`Sandman initialization failed: ${error.message}`);
   }
